@@ -1,5 +1,7 @@
 # Met Éireann weather app endpoint monitor
 
+[View the live status dashboard](https://denisquaidpersonal.github.io/met-eireann-endpoint-monitor/)
+
 This public, free GitHub Actions monitor checks the HTTP request families used by the private MetEireannDarkSky iOS app at 08:00 and 20:00 `Europe/Dublin` time. Its GitHub Pages dashboard shows the latest result and 20 recent checks for each endpoint. "Live" means the most recent scheduled check; the page marks results overdue after 14 hours.
 
 ## Coverage
