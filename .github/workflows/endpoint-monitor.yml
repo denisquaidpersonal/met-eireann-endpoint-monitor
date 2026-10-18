@@ -1,0 +1,115 @@
+name: Weather endpoint monitor
+
+on:
+  schedule:
+    - cron: '0 8,20 * * *'
+      timezone: Europe/Dublin
+  workflow_dispatch:
+    inputs:
+      test_failure:
+        description: 'Temporarily mark the national forecast as failed to test alerting'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: weather-endpoint-monitor
+  cancel-in-progress: false
+
+jobs:
+  check-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Test monitor
+        run: python -m unittest discover -s monitor -p 'test_*.py'
+
+      - name: Load previous checks
+        id: history
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin monitor-status >/dev/null; then
+            git fetch origin refs/heads/monitor-status:refs/remotes/origin/monitor-status
+            git show origin/monitor-status:history.json > "$RUNNER_TEMP/monitor-history.json"
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+          else
+            result=$?
+            if [ "$result" -ne 2 ]; then exit "$result"; fi
+            printf '{"version":1,"runs":[]}\n' > "$RUNNER_TEMP/monitor-history.json"
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check endpoints and build dashboard
+        id: probe
+        shell: bash
+        env:
+          TEST_FAILURE: ${{ inputs.test_failure }}
+        run: |
+          set +e
+          arguments=()
+          if [ "$TEST_FAILURE" = 'true' ]; then arguments+=(--fail-id national); fi
+          python monitor/monitor.py --history "$RUNNER_TEMP/monitor-history.json" --site "$RUNNER_TEMP/monitor-site" "${arguments[@]}"
+          result=$?
+          echo "exit_code=$result" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Save last 20 checks
+        if: steps.probe.outcome == 'success'
+        shell: bash
+        env:
+          BRANCH_EXISTS: ${{ steps.history.outputs.exists }}
+        run: |
+          set -euo pipefail
+          status_tree="$RUNNER_TEMP/monitor-status-tree"
+          git worktree add --detach "$status_tree" HEAD
+          if [ "$BRANCH_EXISTS" = 'true' ]; then
+            git -C "$status_tree" switch -C monitor-status origin/monitor-status
+          else
+            git -C "$status_tree" switch --orphan monitor-status
+          fi
+          cp "$RUNNER_TEMP/monitor-history.json" "$status_tree/history.json"
+          git -C "$status_tree" add history.json
+          git -C "$status_tree" -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Update endpoint monitor history'
+          git -C "$status_tree" push origin HEAD:monitor-status
+
+      - name: Configure GitHub Pages
+        if: steps.probe.outcome == 'success'
+        uses: actions/configure-pages@v5
+
+      - name: Upload dashboard
+        if: steps.probe.outcome == 'success'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/monitor-site
+
+      - name: Deploy dashboard
+        if: steps.probe.outcome == 'success'
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Send failure signal after publishing
+        if: always()
+        shell: bash
+        env:
+          PROBE_EXIT: ${{ steps.probe.outputs.exit_code }}
+        run: |
+          if [ -n "$PROBE_EXIT" ] && [ "$PROBE_EXIT" -ne 0 ]; then
+            echo 'One or more endpoint checks failed. See the published dashboard and this run log.' >&2
+            exit 1
+          fi
