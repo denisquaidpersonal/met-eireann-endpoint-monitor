@@ -149,14 +149,32 @@ def request(check: Check) -> tuple[dict, object]:
     started = time.monotonic()
     response_code = None
     url = check.url
-    try:
-        req = urllib.request.Request(url, headers={"Accept": "application/xml" if check.kind == "xml" else "*/*", "User-Agent": "MetEireannDarkSky-EndpointMonitor/1.0"})
+    retried = False
+
+    def fetch(target: str, headers: dict[str, str]) -> tuple[int, str, bytes]:
+        req = urllib.request.Request(target, headers=headers)
         with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
-            response_code = response.status
+            status = response.status
             content_type = response.headers.get("Content-Type", "")
             data = response.read(MAX_BODY + 1)
-        if not 200 <= response_code < 300:
-            raise urllib.error.HTTPError(url, response_code, "unexpected HTTP status", {}, None)
+        if not 200 <= status < 300:
+            raise urllib.error.HTTPError(target, status, "unexpected HTTP status", {}, None)
+        return status, content_type, data
+
+    try:
+        headers = {"Accept": "application/xml" if check.kind == "xml" else "*/*", "User-Agent": "MetEireannDarkSky-EndpointMonitor/1.0"}
+        try:
+            response_code, content_type, data = fetch(url, headers)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404 or not url.startswith(MET + "json/"):
+                raise
+            # A different CDN edge can cache a missing JSON file while Irish
+            # browsers receive it. Retry once with a fresh cache key.
+            retried = True
+            separator = "&" if "?" in url else "?"
+            retry_url = f"{url}{separator}monitor={time.time_ns()}"
+            retry_headers = {"Accept": "application/json,*/*", "Cache-Control": "no-cache", "User-Agent": "Mozilla/5.0 (compatible; MetEireannDarkSky-EndpointMonitor/1.0)"}
+            response_code, content_type, data = fetch(retry_url, retry_headers)
         if len(data) > MAX_BODY:
             raise ValueError("response exceeds 6 MB")
         parsed = validate(check.kind, data, content_type)
@@ -168,7 +186,7 @@ def request(check: Check) -> tuple[dict, object]:
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         parsed = None
-    return ({"ok": error is None, "status": response_code, "ms": round((time.monotonic() - started) * 1000), "error": error, "url": url}, parsed)
+    return ({"ok": error is None, "status": response_code, "ms": round((time.monotonic() - started) * 1000), "error": error, "url": url, "retried": retried}, parsed)
 
 
 def derived_url(check: Check, source_data: object) -> str:
@@ -244,17 +262,18 @@ def render_dashboard(history: dict, checks: list[Check]) -> str:
         css = status.lower()
         recent = [run["results"].get(check.id) for run in reversed(runs)]
         pips = "".join(f'<span class="pip {"up" if item and item.get("ok") and item.get("status") != 404 else "down"}" title="{html.escape(run["at"])}"></span>' for run, item in zip(reversed(runs), recent))
-        detail = html.escape(str(result.get("error") or ("HTTP 404" if result.get("status") == 404 else "")))
+        detail = html.escape(str(result.get("error") or ("HTTP 404" if result.get("status") == 404 else "200 on retry after 404" if result.get("retried") else "")))
+        detail_class = "error recovered" if result.get("ok") and result.get("retried") else "error"
         url = result.get("url") or check.url
         safe_url = html.escape(url, quote=True)
         elapsed = f'{result["ms"]} ms' if result.get("ms") is not None else "—"
         code = str(result.get("status") or "—")
-        rows.append(f'<tr><td><a href="{safe_url}" rel="noopener noreferrer">{html.escape(check.label)}</a><small>{html.escape(check.id)}</small></td><td><b class="badge {css}">{status}</b></td><td>{code}</td><td>{elapsed}</td><td class="history">{pips}</td><td class="error">{detail}</td></tr>')
+        rows.append(f'<tr><td><a href="{safe_url}" rel="noopener noreferrer">{html.escape(check.label)}</a><small>{html.escape(check.id)}</small></td><td><b class="badge {css}">{status}</b></td><td>{code}</td><td>{elapsed}</td><td class="history">{pips}</td><td class="{detail_class}">{detail}</td></tr>')
     checked = html.escape(history.get("updated_at", "Never"))
     failures = sum(not latest[check.id].get("ok") or latest[check.id].get("status") == 404 for check in checks if check.id in latest)
     headline = f"{failures} failing" if latest else "Awaiting first check"
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="300"><title>Weather API status</title><style>
-:root{{font-family:system-ui,-apple-system,sans-serif;color:#eaf0f8;background:#0e1623}}body{{margin:0 auto;max-width:1400px;padding:24px}}header{{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}}h1{{margin:0;font-size:1.8rem}}p{{color:#a9b9ca}}.summary{{padding:18px 20px;background:#192638;border-radius:14px;margin:22px 0}}.badge{{border-radius:99px;padding:5px 9px;font-size:.75rem}}.up{{background:#164b38;color:#8be9b4}}.down{{background:#632b35;color:#ffd1d5}}.pending{{background:#435067;color:#fff}}table{{width:100%;border-collapse:collapse;background:#172334;border-radius:14px;overflow:hidden}}th,td{{padding:12px;text-align:left;border-bottom:1px solid #304057;vertical-align:middle}}th{{color:#a9b9ca;font-size:.8rem}}th button{{border:0;background:none;color:inherit;font:inherit;font-weight:700;cursor:pointer;padding:0;text-align:left;white-space:nowrap}}th button:hover,th button:focus-visible{{color:#fff;text-decoration:underline}}th[aria-sort="ascending"] button::after{{content:" ▲"}}th[aria-sort="descending"] button::after{{content:" ▼"}}td small{{display:block;color:#8599ae;margin-top:3px}}a{{color:#cde8ff}}.history{{min-width:130px}}.pip{{display:inline-block;width:8px;height:18px;border-radius:3px;margin:1px;background:#435067}}.pip.up{{background:#28ba78}}.pip.down{{background:#ee6876}}.error{{max-width:280px;overflow-wrap:anywhere;color:#ffc2c7;font-size:.85rem}}.stale{{color:#ffcc7a;font-weight:700}}.scroll{{overflow-x:auto}}@media(max-width:700px){{body{{padding:14px}}th,td{{padding:9px;font-size:.84rem}}}}
+:root{{font-family:system-ui,-apple-system,sans-serif;color:#eaf0f8;background:#0e1623}}body{{margin:0 auto;max-width:1400px;padding:24px}}header{{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}}h1{{margin:0;font-size:1.8rem}}p{{color:#a9b9ca}}.summary{{padding:18px 20px;background:#192638;border-radius:14px;margin:22px 0}}.badge{{border-radius:99px;padding:5px 9px;font-size:.75rem}}.up{{background:#164b38;color:#8be9b4}}.down{{background:#632b35;color:#ffd1d5}}.pending{{background:#435067;color:#fff}}table{{width:100%;border-collapse:collapse;background:#172334;border-radius:14px;overflow:hidden}}th,td{{padding:12px;text-align:left;border-bottom:1px solid #304057;vertical-align:middle}}th{{color:#a9b9ca;font-size:.8rem}}th button{{border:0;background:none;color:inherit;font:inherit;font-weight:700;cursor:pointer;padding:0;text-align:left;white-space:nowrap}}th button:hover,th button:focus-visible{{color:#fff;text-decoration:underline}}th[aria-sort="ascending"] button::after{{content:" ▲"}}th[aria-sort="descending"] button::after{{content:" ▼"}}td small{{display:block;color:#8599ae;margin-top:3px}}a{{color:#cde8ff}}.history{{min-width:130px}}.pip{{display:inline-block;width:8px;height:18px;border-radius:3px;margin:1px;background:#435067}}.pip.up{{background:#28ba78}}.pip.down{{background:#ee6876}}.error{{max-width:280px;overflow-wrap:anywhere;color:#ffc2c7;font-size:.85rem}}.error.recovered{{color:#8be9b4}}.stale{{color:#ffcc7a;font-weight:700}}.scroll{{overflow-x:auto}}@media(max-width:700px){{body{{padding:14px}}th,td{{padding:9px;font-size:.84rem}}}}
 </style></head><body><header><div><h1>Weather API status</h1><p>Met Éireann feeds used by the app screens · checked around 08:00 and 20:00 Ireland time</p></div><span id="freshness"></span></header><section class="summary"><strong>{headline}</strong><p>Last check: <time id="checked" datetime="{checked}">{checked}</time> · Last 20 checks per endpoint, newest on the left.</p></section><div class="scroll"><table><thead><tr><th scope="col" aria-sort="none"><button type="button" data-sort="name">Endpoint</button></th><th scope="col" aria-sort="none"><button type="button" data-sort="status">Latest</button></th><th scope="col" aria-sort="none"><button type="button" data-sort="http">HTTP</button></th><th scope="col" aria-sort="none"><button type="button" data-sort="time">Time</button></th><th scope="col" aria-sort="none"><button type="button" data-sort="history">Last 20</button></th><th scope="col" aria-sort="none"><button type="button" data-sort="error">Error</button></th></tr></thead><tbody>{''.join(rows)}</tbody></table></div><p>Latest status reflects the most recent scheduled check, not each request made by a phone. HTTP 404 is shown as DOWN for every feed.</p><script>
 const time=document.getElementById('checked');const last=Date.parse(time.dateTime);
 if(Number.isFinite(last))time.textContent=new Intl.DateTimeFormat('en-IE',{{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Dublin'}}).format(last)+' Ireland time';

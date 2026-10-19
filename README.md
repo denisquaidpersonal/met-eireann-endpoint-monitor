@@ -11,7 +11,7 @@ This public, free GitHub Actions monitor checks the HTTP request families used b
 - Inland warnings plus every county warning code used by the app.
 - Active rainfall frame metadata, a tile from its latest frame, the 24-hour radar archive page, and an image listed by that archive. Dormant radar modes are excluded.
 
-The monitor excludes feeds that are implemented in the networking layer but not requested by app screens: all-warnings, coastal, sea-area, inland-lake, and Open-Meteo UV. It checks HTTP status, basic response structure, and image format. **Every HTTP 404 is DOWN**, including a warning file that the app itself treats as empty. It tolerates raw control characters inside warning JSON strings in the same way as the app. It does **not** collect requests made by users' phones or publish user locations.
+The monitor excludes feeds that are implemented in the networking layer but not requested by app screens: all-warnings, coastal, sea-area, inland-lake, and Open-Meteo UV. It checks HTTP status, basic response structure, and image format. Met Éireann JSON feeds get one fresh request after an initial 404 to account for possible CDN cache differences; the dashboard labels a recovery. **A final HTTP 404 is DOWN**, including a warning file that the app itself treats as empty. It tolerates raw control characters inside warning JSON strings in the same way as the app. It does **not** collect requests made by users' phones or publish user locations.
 
 ## GitHub setup
 

@@ -34,6 +34,43 @@ class MonitorTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "HTTP 404")
 
+    def test_met_json_404_retries_once_and_validates_the_response(self):
+        check = monitor.Check("regional-dublin", "Dublin", monitor.MET + "json/Dublin.json", "forecast")
+        urls = []
+
+        class Response:
+            status = 200
+            headers = {"Content-Type": "application/json"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return b'{"forecasts":[{"regions":[]}]}'
+
+        def open_stub(request, timeout):
+            urls.append(request.full_url)
+            if len(urls) == 1:
+                raise HTTPError(request.full_url, 404, "missing", {}, None)
+            return Response()
+
+        with patch.object(monitor.urllib.request, "urlopen", side_effect=open_stub):
+            result, _ = monitor.request(check)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], 200)
+        self.assertTrue(result["retried"])
+        self.assertEqual(result["url"], check.url)
+        self.assertEqual(len(urls), 2)
+        self.assertTrue(urls[1].startswith(check.url + "?monitor="))
+        history = monitor.append_history({"runs": []}, {check.id: result}, "2026-10-19T16:00:00Z")
+        self.assertIn("200 on retry after 404", monitor.render_dashboard(history, [check]))
+
+    def test_met_json_remains_down_when_retry_is_404(self):
+        check = monitor.Check("regional-dublin", "Dublin", monitor.MET + "json/Dublin.json", "forecast")
+
         class Response:
             status = 404
             headers = {"Content-Type": "application/json"}
@@ -47,10 +84,12 @@ class MonitorTests(unittest.TestCase):
             def read(self, _limit):
                 return b"[]"
 
-        with patch.object(monitor.urllib.request, "urlopen", return_value=Response()):
+        with patch.object(monitor.urllib.request, "urlopen", return_value=Response()) as open_mock:
             result, _ = monitor.request(check)
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "HTTP 404")
+        self.assertTrue(result["retried"])
+        self.assertEqual(open_mock.call_count, 2)
 
     def test_old_404_results_and_unused_checks_are_removed(self):
         checks = [monitor.Check("warning", "Warning", "https://example.test/warnings", "warnings")]
