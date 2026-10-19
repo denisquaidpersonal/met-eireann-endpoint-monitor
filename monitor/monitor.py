@@ -23,6 +23,7 @@ from pathlib import Path
 
 MET = "https://www.met.ie/Open_Data/"
 REGIONS = ("Dublin", "Leinster", "Munster", "Connacht", "Ulster")
+SUPPLEMENT_REGIONS = ("Leinster", "Munster", "Connacht", "Ulster")
 COUNTY_CODES = {
     "Carlow": "EI01", "Cavan": "EI02", "Clare": "EI03", "Cork": "EI04",
     "Donegal": "EI06", "Dublin": "EI07", "Galway": "EI10", "Kerry": "EI11",
@@ -35,7 +36,6 @@ COUNTY_CODES = {
 ARCHIVE_URL = "https://www.met.ie/latest-reports/recent-rainfall-radar/24-hour-rainfall-radar"
 RAINFALL_URL = "https://gdal.met.ie/api/maps/rainfall"
 POINT_URL = "http://openaccess.pf.api.met.ie/metno-wdb2ts/locationforecast?lat=53.3498&long=-6.2603"
-UV_URL = "https://api.open-meteo.com/v1/forecast?latitude=53.3498&longitude=-6.2603&hourly=uv_index&forecast_days=1&timezone=auto"
 MAX_BODY = 6 * 1024 * 1024
 TIMEOUT = 25
 
@@ -56,12 +56,7 @@ def catalogue() -> list[Check]:
         Check("tonight", "Tonight station forecast", MET + "xml/web-3Dayforecast.xml", "xml"),
         Check("observations", "Current observations", MET + "xml/obs_present.xml", "xml"),
         Check("point", "Point forecast · Dublin", POINT_URL, "xml"),
-        Check("warnings-all", "All warnings", MET + "json/warning_ALL.json", "warnings"),
         Check("warnings-inland", "Inland warnings", MET + "json/warning_IRELAND.json", "warnings"),
-        Check("coastal", "Coastal reports", MET + "json/coastal.json", "json"),
-        Check("sea-area", "Sea area forecast", MET + "json/Met-Sea-area.json", "json"),
-        Check("inland-lake", "Inland lake forecast", MET + "json/Inland_Lake_Forecast.json", "json"),
-        Check("uv", "UV forecast · Dublin", UV_URL, "uv"),
         Check("rainfall", "Rainfall frame list", RAINFALL_URL, "frames"),
         Check("rainfall-tile", "Rainfall image tile", "", "image", "rainfall"),
         Check("archive", "24-hour radar archive", ARCHIVE_URL, "archive"),
@@ -69,10 +64,9 @@ def catalogue() -> list[Check]:
     ]
     for region in REGIONS:
         key = region.lower()
-        checks.extend((
-            Check(f"regional-{key}", f"{region} forecast", MET + f"json/{region}.json", "forecast"),
-            Check(f"supplement-{key}", f"{region} pollen/UV text", MET + f"xml/x{region}.xml", "xml"),
-        ))
+        checks.append(Check(f"regional-{key}", f"{region} forecast", MET + f"json/{region}.json", "forecast"))
+    for region in SUPPLEMENT_REGIONS:
+        checks.append(Check(f"supplement-{region.lower()}", f"{region} pollen/UV text", MET + f"xml/x{region}.xml", "xml"))
     for county, code in COUNTY_CODES.items():
         checks.append(Check(f"warning-{code.lower()}", f"{county} warnings", MET + f"json/warning_{code}.json", "warnings"))
     return checks
@@ -161,14 +155,15 @@ def request(check: Check) -> tuple[dict, object]:
             response_code = response.status
             content_type = response.headers.get("Content-Type", "")
             data = response.read(MAX_BODY + 1)
+        if not 200 <= response_code < 300:
+            raise urllib.error.HTTPError(url, response_code, "unexpected HTTP status", {}, None)
         if len(data) > MAX_BODY:
             raise ValueError("response exceeds 6 MB")
         parsed = validate(check.kind, data, content_type)
         error = None
     except urllib.error.HTTPError as exc:
         response_code = exc.code
-        # The app treats an unpublished warning file as an empty warning set.
-        error = None if check.kind == "warnings" and exc.code == 404 else f"HTTP {exc.code}"
+        error = f"HTTP {exc.code}"
         parsed = None
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
@@ -223,28 +218,64 @@ def append_history(history: dict, results: dict, at: str) -> dict:
     return {"version": 1, "updated_at": at, "runs": ([*runs, {"at": at, "results": results}])[-20:]}
 
 
+def current_history(history: dict, checks: list[Check]) -> dict:
+    """Keep screen-active checks and correct previously accepted HTTP 404s."""
+    active_ids = {check.id for check in checks}
+    runs = []
+    for run in history.get("runs", []):
+        results = {}
+        for check_id, result in run["results"].items():
+            if check_id not in active_ids:
+                continue
+            if result.get("status") == 404:
+                result = {**result, "ok": False, "error": "HTTP 404"}
+            results[check_id] = result
+        runs.append({"at": run["at"], "results": results})
+    return {**history, "runs": runs}
+
+
 def render_dashboard(history: dict, checks: list[Check]) -> str:
     runs = history.get("runs", [])
     latest = runs[-1]["results"] if runs else {}
     rows = []
     for check in checks:
         result = latest.get(check.id, {})
-        status = "UP" if result.get("ok") else "DOWN" if result else "PENDING"
+        status = "UP" if result.get("ok") and result.get("status") != 404 else "DOWN" if result else "PENDING"
         css = status.lower()
         recent = [run["results"].get(check.id) for run in reversed(runs)]
-        pips = "".join(f'<span class="pip {"up" if item and item.get("ok") else "down"}" title="{html.escape(run["at"])}"></span>' for run, item in zip(reversed(runs), recent))
-        detail = html.escape(str(result.get("error") or ""))
+        pips = "".join(f'<span class="pip {"up" if item and item.get("ok") and item.get("status") != 404 else "down"}" title="{html.escape(run["at"])}"></span>' for run, item in zip(reversed(runs), recent))
+        detail = html.escape(str(result.get("error") or ("HTTP 404" if result.get("status") == 404 else "")))
         url = result.get("url") or check.url
         safe_url = html.escape(url, quote=True)
         elapsed = f'{result["ms"]} ms' if result.get("ms") is not None else "—"
         code = str(result.get("status") or "—")
         rows.append(f'<tr><td><a href="{safe_url}" rel="noopener noreferrer">{html.escape(check.label)}</a><small>{html.escape(check.id)}</small></td><td><b class="badge {css}">{status}</b></td><td>{code}</td><td>{elapsed}</td><td class="history">{pips}</td><td class="error">{detail}</td></tr>')
     checked = html.escape(history.get("updated_at", "Never"))
-    failures = sum(not item.get("ok") for item in latest.values())
+    failures = sum(not latest[check.id].get("ok") or latest[check.id].get("status") == 404 for check in checks if check.id in latest)
     headline = f"{failures} failing" if latest else "Awaiting first check"
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="300"><title>Weather API status</title><style>
-:root{{font-family:system-ui,-apple-system,sans-serif;color:#eaf0f8;background:#0e1623}}body{{margin:0 auto;max-width:1400px;padding:24px}}header{{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}}h1{{margin:0;font-size:1.8rem}}p{{color:#a9b9ca}}.summary{{padding:18px 20px;background:#192638;border-radius:14px;margin:22px 0}}.badge{{border-radius:99px;padding:5px 9px;font-size:.75rem}}.up{{background:#164b38;color:#8be9b4}}.down{{background:#632b35;color:#ffd1d5}}.pending{{background:#435067;color:#fff}}table{{width:100%;border-collapse:collapse;background:#172334;border-radius:14px;overflow:hidden}}th,td{{padding:12px;text-align:left;border-bottom:1px solid #304057;vertical-align:middle}}th{{color:#a9b9ca;font-size:.8rem}}td small{{display:block;color:#8599ae;margin-top:3px}}a{{color:#cde8ff}}.history{{min-width:130px}}.pip{{display:inline-block;width:8px;height:18px;border-radius:3px;margin:1px;background:#435067}}.pip.up{{background:#28ba78}}.pip.down{{background:#ee6876}}.error{{max-width:280px;overflow-wrap:anywhere;color:#ffc2c7;font-size:.85rem}}.stale{{color:#ffcc7a;font-weight:700}}.scroll{{overflow-x:auto}}@media(max-width:700px){{body{{padding:14px}}th,td{{padding:9px;font-size:.84rem}}}}
-</style></head><body><header><div><h1>Weather API status</h1><p>Met Éireann and UV feeds used by the app · checked around 08:00 and 20:00 Ireland time</p></div><span id="freshness"></span></header><section class="summary"><strong>{headline}</strong><p>Last check: <time id="checked" datetime="{checked}">{checked}</time> · Last 20 checks per endpoint, newest on the left.</p></section><div class="scroll"><table><thead><tr><th>Endpoint</th><th>Latest</th><th>HTTP</th><th>Time</th><th>Last 20</th><th>Error</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div><p>Latest status reflects the most recent scheduled check, not each request made by a phone. A warning feed's HTTP 404 is healthy when no warning file is published.</p><script>const time=document.getElementById('checked');const last=Date.parse(time.dateTime);if(Number.isFinite(last))time.textContent=new Intl.DateTimeFormat('en-IE',{{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Dublin'}}).format(last)+' Ireland time';function freshness(){{const stale=!Number.isFinite(last)||Date.now()-last>14*60*60*1000;const el=document.getElementById('freshness');el.textContent=stale?'Checks overdue':'Checks current';el.className=stale?'stale':''}}freshness();setInterval(freshness,60000)</script></body></html>'''
+:root{{font-family:system-ui,-apple-system,sans-serif;color:#eaf0f8;background:#0e1623}}body{{margin:0 auto;max-width:1400px;padding:24px}}header{{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}}h1{{margin:0;font-size:1.8rem}}p{{color:#a9b9ca}}.summary{{padding:18px 20px;background:#192638;border-radius:14px;margin:22px 0}}.badge{{border-radius:99px;padding:5px 9px;font-size:.75rem}}.up{{background:#164b38;color:#8be9b4}}.down{{background:#632b35;color:#ffd1d5}}.pending{{background:#435067;color:#fff}}table{{width:100%;border-collapse:collapse;background:#172334;border-radius:14px;overflow:hidden}}th,td{{padding:12px;text-align:left;border-bottom:1px solid #304057;vertical-align:middle}}th{{color:#a9b9ca;font-size:.8rem}}th button{{border:0;background:none;color:inherit;font:inherit;font-weight:700;cursor:pointer;padding:0;text-align:left;white-space:nowrap}}th button:hover,th button:focus-visible{{color:#fff;text-decoration:underline}}th[aria-sort="ascending"] button::after{{content:" ▲"}}th[aria-sort="descending"] button::after{{content:" ▼"}}td small{{display:block;color:#8599ae;margin-top:3px}}a{{color:#cde8ff}}.history{{min-width:130px}}.pip{{display:inline-block;width:8px;height:18px;border-radius:3px;margin:1px;background:#435067}}.pip.up{{background:#28ba78}}.pip.down{{background:#ee6876}}.error{{max-width:280px;overflow-wrap:anywhere;color:#ffc2c7;font-size:.85rem}}.stale{{color:#ffcc7a;font-weight:700}}.scroll{{overflow-x:auto}}@media(max-width:700px){{body{{padding:14px}}th,td{{padding:9px;font-size:.84rem}}}}
+</style></head><body><header><div><h1>Weather API status</h1><p>Met Éireann feeds used by the app screens · checked around 08:00 and 20:00 Ireland time</p></div><span id="freshness"></span></header><section class="summary"><strong>{headline}</strong><p>Last check: <time id="checked" datetime="{checked}">{checked}</time> · Last 20 checks per endpoint, newest on the left.</p></section><div class="scroll"><table><thead><tr><th scope="col" aria-sort="none"><button type="button" data-sort="name">Endpoint</button></th><th scope="col" aria-sort="none"><button type="button" data-sort="status">Latest</button></th><th scope="col" aria-sort="none"><button type="button" data-sort="http">HTTP</button></th><th scope="col" aria-sort="none"><button type="button" data-sort="time">Time</button></th><th scope="col" aria-sort="none"><button type="button" data-sort="history">Last 20</button></th><th scope="col" aria-sort="none"><button type="button" data-sort="error">Error</button></th></tr></thead><tbody>{''.join(rows)}</tbody></table></div><p>Latest status reflects the most recent scheduled check, not each request made by a phone. HTTP 404 is shown as DOWN for every feed.</p><script>
+const time=document.getElementById('checked');const last=Date.parse(time.dateTime);
+if(Number.isFinite(last))time.textContent=new Intl.DateTimeFormat('en-IE',{{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Dublin'}}).format(last)+' Ireland time';
+function freshness(){{const stale=!Number.isFinite(last)||Date.now()-last>14*60*60*1000;const el=document.getElementById('freshness');el.textContent=stale?'Checks overdue':'Checks current';el.className=stale?'stale':''}}
+freshness();setInterval(freshness,60000);
+const body=document.querySelector('tbody');const original=[...body.rows];
+const values={{name:row=>row.cells[0].querySelector('a').textContent,status:row=>row.cells[1].textContent.trim(),http:row=>Number.parseInt(row.cells[2].textContent,10),time:row=>Number.parseFloat(row.cells[3].textContent),history:row=>row.cells[4].querySelectorAll('.pip.up').length,error:row=>row.cells[5].textContent.trim()}};
+const numeric=new Set(['http','time','history']);const collator=new Intl.Collator('en',{{numeric:true,sensitivity:'base'}});
+document.querySelectorAll('th button[data-sort]').forEach(button=>button.addEventListener('click',()=>{{
+  const header=button.parentElement;const direction=header.getAttribute('aria-sort')==='ascending'?'descending':'ascending';
+  document.querySelectorAll('th[aria-sort]').forEach(item=>item.setAttribute('aria-sort','none'));
+  header.setAttribute('aria-sort',direction);const key=button.dataset.sort;
+  const sorted=[...original].sort((a,b)=>{{const left=values[key](a),right=values[key](b);
+    const missingLeft=numeric.has(key)&&Number.isNaN(left),missingRight=numeric.has(key)&&Number.isNaN(right);
+    if(missingLeft||missingRight)return missingLeft===missingRight?original.indexOf(a)-original.indexOf(b):missingLeft?1:-1;
+    const order=numeric.has(key)?left-right:collator.compare(left,right);
+    return order?(direction==='ascending'?order:-order):original.indexOf(a)-original.indexOf(b);
+  }});
+  body.replaceChildren(...sorted);
+}}));
+</script></body></html>'''
 
 
 def main() -> int:
@@ -257,6 +288,7 @@ def main() -> int:
     if args.fail_id and args.fail_id not in {check.id for check in checks}:
         parser.error("unknown failure injection ID")
     history = json.loads(args.history.read_text()) if args.history.exists() else {"version": 1, "runs": []}
+    history = current_history(history, checks)
     results = run_checks(checks, args.fail_id)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     history = append_history(history, results, now)

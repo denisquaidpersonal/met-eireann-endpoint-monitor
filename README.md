@@ -7,12 +7,11 @@ This public, free GitHub Actions monitor checks the HTTP request families used b
 ## Coverage
 
 - Met Éireann national and outlook JSON, 3-day Tonight XML, current observations XML, and a representative Dublin point forecast XML.
-- All five regional JSON feeds and all five regional pollen/UV XML feeds.
-- All-warnings and inland-warnings feeds plus every county warning code used by the app. A 404 warning file is treated as an empty warning set, matching app behavior.
-- Coastal, sea-area, and inland-lake JSON, and Open-Meteo numeric UV for Dublin.
+- All five regional JSON feeds and the four regional pollen/UV XML feeds requested by the Forecast screen. Dublin's supplement uses Leinster's feed.
+- Inland warnings plus every county warning code used by the app.
 - Active rainfall frame metadata, a tile from its latest frame, the 24-hour radar archive page, and an image listed by that archive. Dormant radar modes are excluded.
 
-The monitor checks HTTP status, basic response structure, and image format. It tolerates raw control characters inside warning JSON strings in the same way as the app. It does **not** collect requests made by users' phones or publish user locations.
+The monitor excludes feeds that are implemented in the networking layer but not requested by app screens: all-warnings, coastal, sea-area, inland-lake, and Open-Meteo UV. It checks HTTP status, basic response structure, and image format. **Every HTTP 404 is DOWN**, including a warning file that the app itself treats as empty. It tolerates raw control characters inside warning JSON strings in the same way as the app. It does **not** collect requests made by users' phones or publish user locations.
 
 ## GitHub setup
 
