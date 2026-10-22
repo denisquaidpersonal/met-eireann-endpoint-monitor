@@ -4154,8 +4154,373 @@
           "url": "https://www.met.ie/Open_Data/json/warning_IRELAND.json"
         }
       }
+    },
+    {
+      "at": "2026-10-22T22:10:36+00:00",
+      "results": {
+        "archive": {
+          "error": null,
+          "ms": 490,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/latest-reports/recent-rainfall-radar/24-hour-rainfall-radar"
+        },
+        "archive-image": {
+          "error": null,
+          "ms": 461,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/images/radar/web17_radar15_202610222300.png"
+        },
+        "national": {
+          "error": null,
+          "ms": 537,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/National.json"
+        },
+        "observations": {
+          "error": null,
+          "ms": 525,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/xml/obs_present.xml"
+        },
+        "outlook": {
+          "error": "HTTP 404",
+          "ms": 682,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/Outlook.json"
+        },
+        "point": {
+          "error": null,
+          "ms": 945,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "http://openaccess.pf.api.met.ie/metno-wdb2ts/locationforecast?lat=53.3498&long=-6.2603"
+        },
+        "rainfall": {
+          "error": null,
+          "ms": 948,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://gdal.met.ie/api/maps/rainfall"
+        },
+        "rainfall-tile": {
+          "error": null,
+          "ms": 143,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://gdal.met.ie/api/maps/rainfall/202610301200/30/21/6/1792701116"
+        },
+        "regional-connacht": {
+          "error": "HTTP 404",
+          "ms": 434,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/Connacht.json"
+        },
+        "regional-dublin": {
+          "error": "HTTP 404",
+          "ms": 266,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/Dublin.json"
+        },
+        "regional-leinster": {
+          "error": "HTTP 404",
+          "ms": 294,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/Leinster.json"
+        },
+        "regional-munster": {
+          "error": "HTTP 404",
+          "ms": 280,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/Munster.json"
+        },
+        "regional-ulster": {
+          "error": "HTTP 404",
+          "ms": 293,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/Ulster.json"
+        },
+        "supplement-connacht": {
+          "error": null,
+          "ms": 221,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/xml/xConnacht.xml"
+        },
+        "supplement-leinster": {
+          "error": null,
+          "ms": 136,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/xml/xLeinster.xml"
+        },
+        "supplement-munster": {
+          "error": null,
+          "ms": 206,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/xml/xMunster.xml"
+        },
+        "supplement-ulster": {
+          "error": null,
+          "ms": 131,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/xml/xUlster.xml"
+        },
+        "tonight": {
+          "error": null,
+          "ms": 602,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/xml/web-3Dayforecast.xml"
+        },
+        "warning-ei01": {
+          "error": null,
+          "ms": 157,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI01.json"
+        },
+        "warning-ei02": {
+          "error": "HTTP 404",
+          "ms": 305,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI02.json"
+        },
+        "warning-ei03": {
+          "error": null,
+          "ms": 140,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI03.json"
+        },
+        "warning-ei04": {
+          "error": null,
+          "ms": 131,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI04.json"
+        },
+        "warning-ei06": {
+          "error": "HTTP 404",
+          "ms": 272,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI06.json"
+        },
+        "warning-ei07": {
+          "error": null,
+          "ms": 130,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI07.json"
+        },
+        "warning-ei10": {
+          "error": "HTTP 404",
+          "ms": 279,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI10.json"
+        },
+        "warning-ei11": {
+          "error": null,
+          "ms": 162,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI11.json"
+        },
+        "warning-ei12": {
+          "error": null,
+          "ms": 139,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI12.json"
+        },
+        "warning-ei13": {
+          "error": null,
+          "ms": 137,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI13.json"
+        },
+        "warning-ei14": {
+          "error": "HTTP 404",
+          "ms": 275,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI14.json"
+        },
+        "warning-ei15": {
+          "error": null,
+          "ms": 160,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI15.json"
+        },
+        "warning-ei16": {
+          "error": null,
+          "ms": 135,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI16.json"
+        },
+        "warning-ei18": {
+          "error": null,
+          "ms": 130,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI18.json"
+        },
+        "warning-ei19": {
+          "error": null,
+          "ms": 136,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI19.json"
+        },
+        "warning-ei20": {
+          "error": "HTTP 404",
+          "ms": 276,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI20.json"
+        },
+        "warning-ei21": {
+          "error": null,
+          "ms": 137,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI21.json"
+        },
+        "warning-ei22": {
+          "error": "HTTP 404",
+          "ms": 278,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI22.json"
+        },
+        "warning-ei23": {
+          "error": null,
+          "ms": 134,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI23.json"
+        },
+        "warning-ei24": {
+          "error": "HTTP 404",
+          "ms": 284,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI24.json"
+        },
+        "warning-ei25": {
+          "error": "HTTP 404",
+          "ms": 278,
+          "ok": false,
+          "retried": true,
+          "status": 404,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI25.json"
+        },
+        "warning-ei26": {
+          "error": null,
+          "ms": 140,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI26.json"
+        },
+        "warning-ei27": {
+          "error": null,
+          "ms": 144,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI27.json"
+        },
+        "warning-ei29": {
+          "error": null,
+          "ms": 129,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI29.json"
+        },
+        "warning-ei30": {
+          "error": null,
+          "ms": 147,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI30.json"
+        },
+        "warning-ei31": {
+          "error": null,
+          "ms": 140,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_EI31.json"
+        },
+        "warnings-inland": {
+          "error": null,
+          "ms": 136,
+          "ok": true,
+          "retried": false,
+          "status": 200,
+          "url": "https://www.met.ie/Open_Data/json/warning_IRELAND.json"
+        }
+      }
     }
   ],
-  "updated_at": "2026-10-22T12:49:26+00:00",
+  "updated_at": "2026-10-22T22:10:36+00:00",
   "version": 1
 }
